@@ -1,0 +1,2097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC 2-4 Person Video Chat</title>
+
+    <link rel="icon" type="image/x-icon" href="./favicon.ico">
+
+    <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<!--    <script src="//cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script> -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+    
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text-color: #f5f9e8df;
+            
+            /* Button Colors */
+            --success-green: #2ecc71;
+            --success-green-dark: #27ae60;
+            --danger-red: #e74c3c;
+            --danger-red-dark: #c0392b;
+            --warning-orange: #f39c12;
+            --warning-orange-dark: #e67e22;
+            --info-blue: #3498db;
+            --info-blue-dark: #2980b9;
+            --help-purple: #9b59b6;
+            --help-purple-dark: #8e44ad;
+            --close-magenta: #e84393;
+            --close-magenta-dark: #c0397a;
+            --share-teal: #1abc9c;
+            --share-teal-dark: #16a085;
+            --neutral-gray: #7f8c8d;
+            --neutral-gray-dark: #5d6d7e;
+            --btn-size: 80px;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg-color);
+            font-family: system-ui, sans-serif;
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #appContainer {
+            display: grid;
+            grid-template-columns: 1fr;
+            background-color: var(--card-bg);
+            max-height: 100vh;
+            overflow-y: auto;
+        }
+
+        /* Pre-flight Card */
+        #setup-screen {
+            max-width: 480px;
+            margin: auto;
+            padding: 15px;
+            background: var(--card-bg);
+            border-radius: 20px;
+            text-align: center;
+        }
+
+        /* Directions */
+        .directions {
+            margin: 20px auto;
+            max-width: 750px;
+            text-align: center;
+        }
+
+        /* Room Info Box */
+        .room-info {
+            margin: 10px auto;
+            padding: 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            font-size: 0.85rem;
+        }
+
+        .room-info a {
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        .room-info a:hover {
+            text-decoration: underline;
+        }
+
+        .room-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+
+        .room-btn {
+            padding: 6px 12px;
+            background: #444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+
+        .room-btn:hover {
+            background: #555;
+        }
+
+        .room-btn-create {
+            background: #3498db;
+        }
+
+        .room-btn-create:hover {
+            background: #2980b9;
+        }
+
+        .copy-btn {
+            padding: 4px 8px;
+            font-size: 0.7rem;
+            background: #2ecc71;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+
+        .copy-btn:hover {
+            background: #27ae60;
+        }
+
+        .preview-box {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        #startupDirections {
+            width: 100%;
+            padding: 25px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            background-color:goldenrod;  
+            color: black;
+        }
+
+        #roomLink {
+            width: 100%;
+            padding: 25px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            background-color: rgb(27, 190, 223);
+            color: black;
+        }
+
+        #joinBtn {
+            width: 100%;
+            padding: 25px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            background-color: #2ecc71;
+            color: black;
+        }
+
+        /* ---  BASE GRID STYLES (Desktop/Tablet) --- */
+        .grid-container {
+            display: none; /* Hidden by default for your lobby logic */
+            grid-template-columns: repeat(2, 480px); /* Fixed width for perfect 2x2 */
+            gap: 0; 
+            margin: 0 auto;
+            min-height: 100vh;
+            align-content: center;
+            justify-content: center;
+            padding: 10px;
+        }
+
+        /* --- THE GLOBAL VIDEO FIX (Crucial Change) --- */
+        .grid-container video {
+            width: 100%;
+            height: 100%;
+            display: block;
+            /* Changed from cover to contain to prevent "Big Head" on PC */
+            object-fit: contain; 
+            transform:scaleX(-1);
+            background: #000;
+        }
+
+        /* --- THE VIDEO WRAPPER --- */
+        .video-wrapper {
+            position: relative;
+            background: #000;
+            overflow: hidden;
+            aspect-ratio: 16 / 9; 
+            width: 100%;
+        }
+
+        .video-wrapper.active-speaker {
+            border-color: var(--active-green);
+        }
+    
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #localVideo,
+        #localPreview {
+            /* This ensures the local video preview is always visible and not "Big Head" */
+        /*    object-fit: contain;  */
+            transform:scaleX(-1);
+        }
+
+        .label {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            opacity: 1.0;
+        }
+
+        .label:not(:empty) {
+            background: rgba(0, 0, 0, 0.7);  /* Only show background when text exists */
+            opacity: 0.0;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .controls-bar {
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            background: var(--card-bg);
+            flex-shrink: 0;
+        }
+
+        .control-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: var(--btn-size);
+            height: var(--btn-size);
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transition: transform 0.1s, background 0.2s;
+            color: white;
+        }
+
+        .control-btn:active {
+            transform: scale(0.9);
+        }
+
+        .control-btn.active {
+            background-color: #444;
+            color: white;
+        }
+
+        .control-btn.off {
+            background-color: var(--danger-red);
+        }
+
+        .control-btn.hangup {
+            display: flex;
+            flex-direction: column;
+            background-color: var(--danger-red);
+            align-items: center;
+            justify-content: center;
+            width: var(--btn-size);
+            height: var(--btn-size);
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transition: transform 0.1s;
+        }
+
+        .icon {
+            font-size: 2rem;
+            margin-bottom: 2px;
+        }
+
+        :fullscreen video {
+            object-fit: contain;
+        }
+
+        @keyframes pulse-green {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 15px rgba(46, 204, 113, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+        }
+
+        .pulse {
+            animation: pulse-green 2s infinite;
+            background-color: var(--active-green) !important;
+            border: 2px solid white !important;
+            opacity: 1 !important;
+        }
+
+        /* Progress bar container */
+        .prog-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 15;
+            border-radius: 3px 3px 0 0;
+        }
+
+        /* Progress bar fill - THIS NEEDS TO BE GREEN */
+        .prog-fill {
+            height: 100%;
+            width: 0%;
+            background: #2ecc71 !important;  /* Force green with !important */
+            transition: width 0.1s linear;
+            border-radius: 3px 0 0 0;
+        }
+
+        /* Help Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            z-index: 10001;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            max-width: 500px;
+            width: 90%;
+            max-height: 85vh;
+            border-radius: 20px;
+            overflow: hidden;
+            animation: modalFadeIn 0.3s;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-header {
+            background: var(--active-green);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: white;
+            font-size: 1.3rem;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .modal-close:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            max-height: calc(85vh - 70px);
+        }
+
+        /* Help Sections */
+        .help-section {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 15px;
+        }
+
+        .help-section h4 {
+            margin: 0 0 10px 0;
+            color: var(--active-green);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.1rem;
+        }
+
+        .help-section p {
+            margin: 8px 0;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            color: #ddd;
+        }
+
+        .help-section ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .help-section li {
+            margin: 5px 0;
+            font-size: 0.85rem;
+            color: #ccc;
+        }
+
+        .help-tip {
+            background: rgba(46,204,113,0.15);
+            border-left: 3px solid var(--active-green);
+            padding: 8px 12px;
+            margin: 10px 0;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.85rem;
+        }
+
+        .help-tip strong {
+            color: var(--active-green);
+        }
+
+        code {
+            background: #1a1a1a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+
+        /* Tooltip Styles - Fixed */
+        [data-tooltip] {
+            position: relative;
+            cursor: help;
+        }
+
+        [data-tooltip]:before {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 8px;
+            padding: 6px 12px;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            font-size: 0.9rem;
+            font-weight: normal;
+            white-space: nowrap;
+            border-radius: 6px;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.2s, visibility 0.2s;
+            font-family: system-ui, sans-serif;
+        }
+
+        /* Tooltip arrow */
+        [data-tooltip]:after {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 2px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: rgba(0,0,0,0.9) transparent transparent transparent;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            pointer-events: none;
+        }
+
+        /* Show tooltip on hover */
+        [data-tooltip]:hover:before,
+        [data-tooltip]:hover:after {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Mic Button */
+        #micBtn {
+            background-color: #444;
+        }
+        #micBtn.off {
+            background-color: var(--danger-red);
+        }
+        #micBtn.off:hover {
+            background-color: var(--danger-red-dark);
+        }
+
+        /* Leave Button */
+        #hangupBtn {
+            background-color: var(--danger-red);
+        }
+
+        #hangupBtn:hover {
+            background-color: var(--danger-red-dark);
+        }
+
+        /* Camera Button */
+        #camBtn {
+            background-color: #444;
+        }
+        #camBtn.off {
+            background-color: var(--warning-orange);
+        }
+        #camBtn.off:hover {
+            background-color: var(--warning-orange-dark);
+        }
+
+        /* Screen Share Button */
+        #screenBtn {
+            background-color: var(--share-teal);
+        }
+        #screenBtn:hover {
+            background-color: var(--share-teal-dark);
+        }
+        #screenBtn.off {
+            background-color: var(--neutral-gray);
+        }
+
+        /* Help Button */
+        #helpBtn {
+            background-color: var(--help-purple);
+        }
+        #helpBtn:hover {
+            background-color: var(--help-purple-dark);
+        }
+
+        #snapshotAllBtn {
+            background-color: var(--info-blue);
+        }
+
+        #snapshotAllBtn:hover {
+            background-color: var(--info-blue-dark);
+        }
+
+        #screenshotBtn {
+            background-color: var(--warning-orange);
+        }
+        #screenshotBtn:hover {
+            background-color: var(--warning-orange-dark);
+        }
+
+        /* Close App Button */
+        #closeAppBtn {
+            background-color: var(--close-magenta);
+        }
+        #closeAppBtn:hover {
+            background-color: var(--close-magenta-dark);
+        }
+
+        /* Fullscreen Button (on remote videos) */
+        .fullscreen-btn {
+            position: absolute;
+            width: auto;
+            height: 36px;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.5);
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            opacity: 0.35;
+            transition: opacity 0.2s, transform 0.2s, background 0.2s;
+            font-size: 0.8rem;
+            z-index: 10;
+            overflow: visible;  /* Important for tooltips */
+            background-color: var(--neutral-gray);
+
+        }
+        .fullscreen-btn:hover {
+            opacity: 1;
+            transform: scale(1.02);
+            background-color: var(--neutral-gray-dark);
+            overflow: visible; 
+        }
+
+        /* Send Zip Button */
+        .send-zip-btn {
+            position: absolute;
+            width: auto;
+            height: 36px;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.5);
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            opacity: 0.35;
+            transition: opacity 0.2s, transform 0.2s, background 0.2s;
+            font-size: 0.8rem;
+            z-index: 10;
+            overflow: visible;  /* Important for tooltips */
+            background-color: var(--neutral-gray);
+        }
+
+        .send-zip-btn:hover {
+            opacity: 1;
+            transform: scale(1.02);
+            background-color: var(--neutral-gray-dark);
+            overflow: visible; 
+        }
+
+        /* Accept Zip Button */
+        .accept-zip-btn {
+            position: absolute;
+            width: auto;
+            height: 36px;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.5);
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            opacity: 0.35;
+            transition: opacity 0.2s, transform 0.2s, background 0.2s;
+            font-size: 0.8rem;
+            z-index: 10;
+            overflow: visible;  /* Important for tooltips */
+            background-color: var(--success-green);
+        }
+
+        .accept-zip-btn:hover {
+            opacity: 1;
+            transform: scale(1.02);
+            background-color: var(--success-green-dark);
+            overflow: visible; 
+        }
+        
+        /* Hover animation for all buttons */
+        .control-btn:hover, .fullscreen-btn:hover {
+            transform: scale(1.05);
+            filter: brightness(1.1);
+        }
+
+        .control-btn:active, .fullscreen-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* --- MOBILE STYLES (Vivo X80 Pro & Cellphones) --- */
+        @media (max-width: 768px) {
+            .grid-container {
+                /* This keeps it hidden/shown based on your JS, but sets layout */
+                grid-template-columns: 1fr; 
+                justify-items: center; 
+                gap: 8px;
+                padding: 10px;
+            }
+
+            .video-wrapper {
+                width: 85%;            /* Shrinks width so they fit screen vertically */
+                max-height: 200px;     /* Prevents one video from eating the whole screen */
+                border-radius: 12px;
+            }
+        }
+
+        
+    </style>
+</head>
+<body>
+<div id="appContainer">
+    <div id="setup-screen">
+        <h1>2-4 Person Video Chat!</h1>
+        
+        <button id="startupDirections" onclick="toggleStartupDirections()" style="margin-bottom: 10px;">Directions to Video Chat</button>
+       
+        <div class="directions" id="directions" style="display:none;">
+            <p style="font-size: 0.9rem; padding: 5px 0;">
+                No downloads required - works right in your browser!<br>
+                Tested with Chrome, Edge, Firefox, and Safari.<br><br>
+                1. Copy and paste the Custom Room Link into your browser.<br>        
+                2. Click "Allow Camera/Mic access while visiting the site" if prompted.<br>
+                3. Click "START/JOIN" button to start or join a call already in progress.<br>
+                   If you are first person starting the call, just wait for others to join.<br>
+                   If you are the 2-3-4 person to join, you will automatically enter.<br>
+                4. You are now ready to chat with others.<br><br>
+                Scroll down for more controls after joining.<br>
+                Note: You can have at most 2-4 people in the call!<br>
+                <p style="margin-top: 10px;">
+                    <a href="#" onclick="openHelpModal(); return false;" style="color: #3498db;">❓ Need help? User Guide</a>
+                </p>
+            </p>
+        </div>
+
+        <button id="roomLink" onclick="toggleRoomLink()" style="margin-bottom: 10px;">Create a New Private Room Link</button>
+
+        <div class="room-link-info" id="roomLinkInfo" style="display:none;">
+            <p style="font-size: 1.0rem; padding: 5px 0;">
+                You can create your own private room link for your family and<br>
+                friends to join for a safe and private video chat! You can<br>
+                create multiple custom room links, each for a different group!<br>
+                You can share each link with those you want to join in the call.<br>
+                Others can use the app at the same time by using their custom<br>
+                private room link. One way to create a unique room link for your<br>
+                group is to follow the steps below.<br>
+            </p>
+
+            <p style="font-size: 1.0rem; background: #2d2d2d; padding: 10px; border-radius: 8px; margin-top: 10px;">
+                <strong>📌 TIP: Create Your Own Private Custom Room Link</strong><br>
+                1. Think of a unique room name for your family or group<br>
+                   Example 1: <span style="color: yellow">smith-family-video-chat</span><br>
+                   Example 2: <span style="color: yellow">thailand-usa-connect</span><br>
+                   Example 3: <span style="color: yellow">high-school-class-1967</span><br>
+                   Example 4: <span style="color: yellow">ydghfiaaohfpahrfiwe8902y</span><br><br>
+                   NOTE: Use only lowercase letters, numbers, and hyphens for <br>
+                   best results ... avoid any special characters such as spaces,
+                   commas, or periods. Use hyphens (dash) to separate words.<br><br>
+                2. Click the following blue button to create your custom URL:<br>
+                   The custom URL will have the following format:<br>
+                   https://meshvideochat.fly.dev?room=your-custom-room-name<br><br>
+                   The above examples would create the following custom URL's:<br>
+                   https://meshvideochat.fly.dev?room=<span style="color: yellow">smith-family-video-chat</span><br>
+                   https://meshvideochat.fly.dev?room=<span style="color: yellow">thailand-usa-connect</span><br>
+                   https://meshvideochat.fly.dev?room=<span style="color: yellow">high-school-class-1967</span><br>
+                   https://meshvideochat.fly.dev?room=<span style="color: yellow">ydghfiaaohfpahrfiwe8902y</span><br><br>
+                   
+                   <button class="room-btn room-btn-create" onclick="createCustomRoom()">✨ Create Custom Room</button><br><br>
+                3. After creating your custom room link, you must save the<br>
+                   link for yourself and send the link to those you want to<br>
+                   chat with. You can bookmark the link for yourself and send<br>
+                   to others through email, text, or social media like Messenger<br>
+                   or Line!<br><br>
+                4. Use the same link every time - it's your private room!<br><br>
+                5. The four parts of the custom private room link are: <br>
+                   https://meshvideochat.fly.dev?room=your-custom-room-name<br><br>
+                   <u>https</u> indicates a secure connection with data encryption.<br>
+                   <u>meshvideochat.fly.dev</u> is my app name on the fly.io server<br>
+                      where my program lives and runs from. fly.io is the platform<br>
+                      hosting the video chat. My program is still under development.<br>
+                   <u>?room=</u> indicates that the following text is the room name<br>
+                      your have chosen for your private room.<br>
+                   <u>your-custom-room-name</u> is your custom area for you and your<br>
+                      invited guests to meet.<br><br>
+            </p>
+        </div>
+
+        <div class="preview-box">
+            <video id="localPreview" autoplay muted playsinline></video>
+        </div>
+        <p id="statusMsg">Checking camera...</p>
+        <button id="joinBtn" onclick="startCall()">START/JOIN</button>
+    </div>
+
+    <div class="video-dashboard">
+        <div id="video-grid" class="grid-container">
+            <div class="video-wrapper self">
+                <video id="localVideo" autoplay muted playsinline></video>
+            </div>
+        </div>
+        <div class="controls-bar">
+            <button onclick="openHelpModal()" class="control-btn" id="helpBtn" data-tooltip="Complete Video Chat Guide / Help?"><span class="icon">❓</span> User Guide
+            </button>
+
+            <button class="control-btn" id="tutorial-btn" onclick="window.open('https://youtu.be/tGlaWb_TR-E', '_blank')" style="background: rgb(157, 157, 249);" data-tooltip="youTube Video Showing All Features"><span class="icon">▶️</span> Watch Tutorial
+            </button>
+
+            <button id="micBtn" class="control-btn active" onclick="toggleMic()" data-tooltip="Mute/unmute your microphone"><span class="icon">🎤</span> Mute
+            </button>
+            
+            <button id="hangupBtn" class="control-btn hangup" onclick="hangUp()" data-tooltip="Leave the call and return to start"><span class="icon">✆</span> Leave
+            </button>
+            
+            <button id="camBtn" class="control-btn active" onclick="toggleCamera()" data-tooltip="Turn your camera on/off"><span class="icon">📷</span> Camera
+            </button>
+.
+            <button id="screenBtn" class="control-btn active" onclick="toggleScreenShare()" data-tooltip="Share your screen (present documents, photos, etc.)"><span class="icon">💻</span> Share
+            </button>
+
+            <button id="snapshotAllBtn" class="control-btn" onclick="snapshotAllVideos()" data-tooltip="Take photo of each visible videos"><span class="icon">📸</span> Snap All
+            </button>
+
+            <button id="screenshotBtn" class="control-btn" onclick="captureFullScreen()" data-tooltip="Capture entire screen (all videos + controls)">
+            <span class="icon">🖥️</span> PrtScr
+            </button>
+
+            <button id="closeAppBtn" class="control-btn closeApp" data-tooltip="Close the app completely"><span class="icon">🚪</span> Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Get room from URL parameter, or use default
+    const urlParams = new URLSearchParams(window.location.search);
+    const ROOM_ID = urlParams.get('room') || 'thailand-us-connect';
+    const SIGNALING_SERVER = window.location.origin; 
+    
+    let localStream;
+    let socket;
+    const peers = {};
+    const pendingPeers = new Set();  // Users currently joining
+    let streamReady = false;
+    let currentIceConfig = null;
+    const peerStates = {};  // Track connection state for each peer
+
+    console.log('🚀 App starting up...');
+    console.log('📡 Room ID:', ROOM_ID);
+
+    // --- Room Management Functions ---
+    function updateRoomDisplay() {
+        const roomDisplay = document.getElementById('currentRoomDisplay');
+        const shareLinkSpan = document.getElementById('shareLink');
+        
+        if (roomDisplay) {
+            roomDisplay.textContent = ROOM_ID;
+        }
+        
+        if (shareLinkSpan) {
+            const shareUrl = `${window.location.origin}?room=${encodeURIComponent(ROOM_ID)}`;
+            shareLinkSpan.textContent = shareUrl;
+            // Make it a clickable link
+            shareLinkSpan.innerHTML = `<a href="${shareUrl}" target="_blank">${shareUrl}</a>`;
+        }
+    }
+
+    function switchRoom(roomName) {
+        const newUrl = `${window.location.origin}?room=${encodeURIComponent(roomName)}`;
+        window.location.href = newUrl;
+    }
+
+    function createCustomRoom() {
+        const roomName = prompt('Enter a unique room name (lowercase letters, numbers, hyphens only):', 'family-reunion');
+        if (roomName && roomName.trim()) {
+            const cleanName = roomName.trim().replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase();
+            if (cleanName) {
+                switchRoom(cleanName);
+            } else {
+                alert('Please use only letters, numbers, and hyphens');
+            }
+        }
+    }
+
+    function copyRoomLink() {
+        const shareUrl = `${window.location.origin}?room=${encodeURIComponent(ROOM_ID)}`;
+        navigator.clipboard.writeText(shareUrl).then(() => {
+            alert('✅ Link copied! Share with family to join this room.');
+        }).catch(() => {
+            prompt('📋 Copy this link to share:', shareUrl);
+        });
+    }
+
+    // Call when page loads
+    setTimeout(updateRoomDisplay, 100);
+
+    // --- NEW: Async TURN credential fetcher ---
+    async function getConnectionConfig() {
+        console.log('🔐 Fetching TURN credentials from server...');
+        try {
+            const response = await fetch("/turn-credentials");
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            const { username, credential } = await response.json();
+            
+            console.log('✅ TURN credentials fetched successfully');
+            
+            return {
+                iceServers: [
+                    { urls: "stun:stun.l.google.com:19302" },
+                    { urls: "stun:hk-turn1.xirsys.com" },
+                    { urls: "stun:ws.xirsys.com" },
+                    { urls: "stun:us.xirsys.com" }, 
+                    {
+                        urls: [
+                            "turn:hk-turn1.xirsys.com:80?transport=udp",
+                            "turn:hk-turn1.xirsys.com:3478?transport=udp",
+                            "turn:hk-turn1.xirsys.com:80?transport=tcp",
+                            "turn:hk-turn1.xirsys.com:3478?transport=tcp",
+                            "turns:hk-turn1.xirsys.com:443?transport=tcp",
+                            "turns:hk-turn1.xirsys.com:5349?transport=tcp",
+                            "turn:ws.xirsys.com:80?transport=udp",
+                            "turn:ws.xirsys.com:3478?transport=udp",
+                            "turn:ws.xirsys.com:80?transport=tcp",
+                            "turns:ws.xirsys.com:443?transport=tcp",
+                            "turn:us.xirsys.com:80?transport=udp",
+                            "turn:us.xirsys.com:3478?transport=udp",
+                            "turn:us.xirsys.com:80?transport=tcp",
+                            "turns:us.xirsys.com:443?transport=tcp"
+                        ],
+                        username: username,
+                        credential: credential
+                    }
+                ],
+                iceCandidatePoolSize: 10
+            };
+        } catch (e) {
+            console.error('❌ Failed to fetch TURN credentials:', e);
+            console.warn('⚠️ Falling back to STUN only (direct connections may fail)');
+            return { 
+                iceServers: [
+                    { urls: "stun:stun.l.google.com:19302" },
+                    { urls: "stun:stun1.l.google.com:19302" },
+                    { urls: "stun:stun2.l.google.com:19302" }
+                ],
+                iceCandidatePoolSize: 10
+            };
+        }
+    }
+
+    // 1. INITIAL CAMERA PREVIEW
+    console.log('📷 Requesting camera/microphone access...');
+        navigator.mediaDevices.getUserMedia({ 
+            video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24 } }, 
+            audio: true 
+        })
+/*    navigator.mediaDevices.getUserMedia({ video: true, audio: true }) */
+        .then(stream => {
+            localStream = stream;
+            streamReady = true;
+            document.getElementById('localPreview').srcObject = stream;
+            document.getElementById('localVideo').srcObject = stream;
+            document.getElementById('statusMsg').innerHTML = "✅ Camera ready!";
+            console.log('✅ Local stream acquired successfully');
+            console.log('   - Video tracks:', stream.getVideoTracks().length);
+            console.log('   - Audio tracks:', stream.getAudioTracks().length);
+            
+            getConnectionConfig().then(config => {
+                currentIceConfig = config;
+                console.log('🔧 ICE configuration pre-fetched and ready');
+            });
+        })
+        .catch(err => {
+            console.error('❌ Media Error:', err);
+            document.getElementById('statusMsg').innerHTML = "❌ Please enable camera and microphone access.";
+            streamReady = false;
+        });
+
+    // 2. CORE CALL LOGIC
+    async function startCall() {
+        console.log('🎬 startCall() triggered');
+
+        if (!streamReady || !localStream) {
+            console.error('❌ Cannot start call - localStream not ready yet!');
+            document.getElementById('statusMsg').innerHTML = "⏳ Waiting for camera... Please try again in a moment.";
+            return;
+        }
+        
+        if (!currentIceConfig) {
+            console.log('⏳ Fetching ICE configuration...');
+            document.getElementById('statusMsg').innerHTML = "⏳ Connecting to server...";
+            currentIceConfig = await getConnectionConfig();
+        }
+        
+        console.log('✅ Local stream ready, initializing call with ICE config...');
+        console.log('📡 Using Room ID:', ROOM_ID);
+        
+        document.getElementById('setup-screen').classList.add('hidden');
+        document.getElementById('video-grid').style.display = 'grid';
+
+        socket = io(SIGNALING_SERVER, {
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 5
+        });
+        
+        socket.on('connect', () => {
+            console.log('🔌 Socket.IO connected! ID:', socket.id);
+            socket.emit('join-room', ROOM_ID);
+            console.log('📡 Joined room:', ROOM_ID);
+        });
+
+        socket.on('all-users', users => {
+            console.log('📋 Received existing users:', users);
+            users.forEach(userID => {
+                console.log('➕ Creating peer (receiver) for existing user:', userID);
+                // ✅ Create a RECEIVER (not initiator) since the existing user will send the offer
+                const peer = addPeer(null, userID, localStream);  // null signal - wait for initiator
+                peers[userID] = peer;
+            });
+        });
+
+        socket.on('user-joined', payload => {
+            console.log('👤 New user joined:', payload.callerID);
+            console.log('  📦 Signal present?', payload.signal ? 'YES' : 'NO');
+
+            if (payload.callerID === socket.id) return;
+            
+            // If we already have a peer AND this is a signal, forward it
+            if (peers[payload.callerID]) {
+                if (payload.signal && peerStates[payload.callerID] !== 'connected') {
+                    console.log('📡 Forwarding signal to existing peer for:', payload.callerID);
+                    try {
+                        peers[payload.callerID].signal(payload.signal);
+                    } catch (err) {
+                        console.error('❌ Error forwarding signal:', err);
+                    }
+                }
+                return;
+            }
+            
+            if (pendingPeers.has(payload.callerID)) {
+                console.log('⚠️ Already pending, ignoring duplicate:', payload.callerID);
+                return;
+            }
+            
+            pendingPeers.add(payload.callerID);
+            playJoinTone();
+            
+            // ✅ KEY FIX: If we already have ANY peers, we should be INITIATOR for the newcomer
+            const existingPeersCount = Object.keys(peers).length;
+            let peer;
+            
+            if (existingPeersCount === 0) {
+                // We are the first person in the room - create INITIATOR
+                console.log('🎯 No existing peers - creating INITIATOR for:', payload.callerID);
+                peer = createPeer(payload.callerID, socket.id, localStream);
+            } else {
+                // We already have peers - we are NOT the newcomer, so create INITIATOR
+                console.log('🎯 We have existing peers - creating INITIATOR for newcomer:', payload.callerID);
+                peer = createPeer(payload.callerID, socket.id, localStream);
+            }
+            
+            peers[payload.callerID] = peer;
+            
+            setTimeout(() => pendingPeers.delete(payload.callerID), 5000);
+            
+            peer.on('close', () => {
+                delete peers[payload.callerID];
+                delete peerStates[payload.callerID];
+                pendingPeers.delete(payload.callerID);
+            });
+        });
+      
+
+        socket.on('receiving-returned-signal', payload => {
+            console.log('🔄 Received returned signal from:', payload.id);
+            
+            // Don't process if already connected
+            if (peerStates[payload.id] === 'connected') {
+                console.log('⏭️ Ignoring signal - already connected to:', payload.id);
+                return;
+            }
+            
+            if (peers[payload.id]) {
+                try {
+                    peers[payload.id].signal(payload.signal);
+                    console.log('✅ Signal forwarded to peer:', payload.id);
+                } catch (err) {
+                    console.error('❌ Error signaling peer:', err);
+                }
+            } else {
+                console.warn('⚠️ No peer found for signal from:', payload.id);
+            }
+        });
+
+        socket.on('user-left', userID => {
+            console.log('🚪 User left:', userID);
+            const el = document.getElementById(`wrap-${userID}`);
+            if (el) el.remove();
+            if (peers[userID]) {
+                peers[userID].destroy();
+                delete peers[userID];
+                console.log('🗑️ Peer destroyed for:', userID);
+            }
+        });
+        
+        socket.on('connect_error', (err) => {
+            console.error('❌ Socket connection error:', err);
+            document.getElementById('statusMsg').innerHTML = "❌ Connection error. Please refresh and try again.";
+        });
+        
+        socket.on('disconnect', () => {
+            console.warn('⚠️ Socket disconnected');
+        });
+    }
+
+    // 3. PEER HELPERS
+    function createPeer(userToSignal, callerID, stream) {
+        console.log('🔧 Creating peer (initiator) for:', userToSignal);
+        
+        const newPeer = new SimplePeer({ 
+            initiator: true, 
+       //     trickle: false, 
+            stream, 
+            config: currentIceConfig,
+            debug: true
+        });    
+
+        newPeer.on('signal', signal => {
+            console.log('📡 Sending signal to:', userToSignal);
+            socket.emit('sending-signal', { userToSignal, callerID, signal });
+        });
+
+        newPeer.on('stream', st => {
+            console.log('📹 Received remote stream from:', userToSignal);
+            addRemoteVideo(st, userToSignal, newPeer);
+        });
+
+        // In both createPeer and addPeer, add this to the 'connect' event:
+        newPeer.on('connect', () => {
+        //    console.log('✅✅✅ Peer CONNECTED to:', userToSignal);
+            console.log('✅✅✅ Peer CONNECTED to:', userToSignal || callerID || 'unknown');
+            peerStates[userToSignal] = 'connected';  // Mark as connected
+        });
+        
+        newPeer.on('close', () => {
+            console.log('🔌 Peer closed connection with:', userToSignal);
+            delete peerStates[userToSignal];  // Clean up state
+        });
+        
+        newPeer.on('error', err => {
+            console.error('❌ Peer Error with', userToSignal, ':', err);
+        });
+        
+        return newPeer;
+    }
+
+    function addPeer(incomingSignal, callerID, stream) {
+        console.log('🔧 Creating peer (receiver) for:', callerID);
+        
+        const newPeer = new SimplePeer({ 
+            initiator: false, 
+            stream, 
+            config: currentIceConfig,
+            debug: true
+        });
+        
+        newPeer.on('signal', signal => {
+            console.log('📡 Returning signal to:', callerID);
+            socket.emit('returning-signal', { signal, callerID });
+        });
+
+        newPeer.on('stream', st => {
+            console.log('📹 Received remote stream from:', callerID);
+            addRemoteVideo(st, callerID, newPeer);
+        });
+
+        newPeer.on('connect', () => {
+            console.log('✅✅✅ Peer CONNECTED to:', callerID);
+            peerStates[callerID] = 'connected';
+        });
+
+        newPeer.on('close', () => {
+            console.log('🔌 Peer closed connection with:', userToSignal);
+            delete peerStates[userToSignal];  // Clean up state
+        });
+        
+ 
+        newPeer.on('error', err => {
+            console.error('❌ Peer Error with', callerID, ':', err);
+        });
+        
+        // ✅ ONLY call signal if we have a signal to process
+        if (incomingSignal) {
+            newPeer.signal(incomingSignal);
+            console.log('📡 Signaled peer with incoming signal');
+        } else {
+            console.log('⏳ No incoming signal yet - waiting for initiator');
+        }
+        
+        return newPeer;
+    }
+
+    /* --------- Setup Remote video with Full Screen, Send, and Accept buttons -------*/
+    function addRemoteVideo(stream, remoteID, peer) {
+        console.log('🖼️ Adding remote video element for:', remoteID);
+        
+        if (document.getElementById(`wrap-${remoteID}`)) {
+            console.log('⚠️ Video wrapper already exists for:', remoteID);
+            return;
+        }
+
+        const div = document.createElement('div');
+        div.className = 'video-wrapper';
+        div.id = `wrap-${remoteID}`;
+        
+        div.innerHTML = `
+            <video id="vid-${remoteID}" autoplay playsinline></video>
+            
+            <div id="prog-cont-${remoteID}" class="prog-container hidden">
+                <div id="prog-bar-${remoteID}" class="prog-fill"></div>
+            </div>
+
+            <div class="label">
+                <span id="status-${remoteID}" style="color: #f1c40f;"></span>
+            </div>
+
+            <div class="video-controls">
+                <button id="accept-${remoteID}" class="accept-zip-btn hidden" style="top: 15px; right: 15px;" data-tooltip="Accept Zip before transfer begins">| Accept Zip |</button>
+
+                <button class="send-zip-btn" style="bottom: 5px; left: 80px;" onclick="initiateFileSend('${remoteID}')" data-tooltip="Send File - zip, photo, doc, etc">📤 Send Zip</button>
+
+                <button class="fullscreen-btn" style="bottom: 5px; right: 45px;" onclick="toggleFullScreen('wrap-${remoteID}')" data-tooltip="Show full screen - press ESC key">| Full Screen |</button>
+            </div>
+        `;
+        
+        document.getElementById('video-grid').appendChild(div);
+        const videoElement = document.getElementById(`vid-${remoteID}`);
+        videoElement.srcObject = stream;
+        console.log('✅ Remote video element added for:', remoteID);
+
+        peer.on('data', data => {
+            console.log('💾 Received data from:', remoteID, 'size:', data.byteLength);
+            handleIncomingData(data, remoteID);
+        });
+        
+        videoElement.play().catch(e => console.warn('Autoplay blocked:', e));
+
+        peer.on('connect', () => {
+            const status = document.getElementById(`status-${remoteID}`);
+            if (status) {
+                status.innerText = "";
+            }
+        });
+
+        videoElement.onplaying = () => {
+            const status = document.getElementById(`status-${remoteID}`);
+            if (status && status.innerText !== "Live") {
+                status.innerText = "";
+                console.log('▶️ Video playing for:', remoteID);
+            }
+        };
+
+        const acceptBtn = document.getElementById(`accept-${remoteID}`);
+        if (acceptBtn) {
+            acceptBtn.addEventListener('click', () => {
+                console.log('📥 Accept button clicked for:', remoteID);
+                acceptBtn.classList.remove('pulse');
+                acceptBtn.classList.add('hidden');
+            });
+        }
+    }
+
+    // 5. CONTROL BUTTON FUNCTIONS
+    function toggleMic() {
+        console.log('🎤 Toggle mic');
+        const track = localStream.getAudioTracks()[0];
+        if (track) {
+            track.enabled = !track.enabled;
+            const btn = document.getElementById('micBtn');
+            btn.classList.toggle('off', !track.enabled);
+            btn.innerHTML = track.enabled ? '<span class="icon">🎤</span> Mute' : '<span class="icon">🔇</span> Unmute';
+            console.log('   Mic enabled:', track.enabled);
+        }
+    }
+
+    function toggleCamera() {
+        console.log('📷 Toggle camera');  
+        const track = localStream.getVideoTracks()[0];                                     
+        if (track) {
+            track.enabled = !track.enabled;
+            const btn = document.getElementById('camBtn');
+            btn.classList.toggle('off', !track.enabled);
+            btn.innerHTML = track.enabled ? '<span class="icon">📷</span> Camera' : '<span class="icon">🎥</span> Stopped';
+            console.log('   Camera enabled:', track.enabled);
+        }
+    }
+
+    async function toggleScreenShare() {
+        console.log('💻 Starting screen share...');
+        try {
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            const screenTrack = screenStream.getVideoTracks()[0];
+            console.log('✅ Screen share stream acquired');
+
+            Object.values(peers).forEach(peer => {
+                const currentVideoTrack = localStream.getVideoTracks()[0];
+                peer.replaceTrack(currentVideoTrack, screenTrack, localStream);
+            });
+
+            document.getElementById('localVideo').srcObject = screenStream;
+
+            screenTrack.onended = () => {
+                console.log('🛑 Screen share ended');
+                stopScreenShare();
+            };
+        } catch (err) {
+            console.error("❌ Screen share error:", err);
+        }
+    }
+
+    function stopScreenShare() {
+        console.log('🔄 Stopping screen share, returning to camera');
+        const videoTrack = localStream.getVideoTracks()[0];
+        Object.values(peers).forEach(peer => {
+            const currentTrack = peer.streams[0]?.getVideoTracks()[0];
+            if (currentTrack) {
+                peer.replaceTrack(currentTrack, videoTrack, localStream);
+            }
+        });
+        document.getElementById('localVideo').srcObject = localStream;
+    }
+
+    function toggleFullScreen(elementId) {
+        console.log('🖥️ Toggle fullscreen for:', elementId);
+        const el = document.getElementById(elementId);
+        if (!document.fullscreenElement) {
+            el.requestFullscreen().catch(err => console.error(err));
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    function hangUp() {
+        console.log('📞 Hang up - reloading page');
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+        }
+        Object.values(peers).forEach(peer => peer.destroy());
+        if (socket) socket.disconnect();
+        window.location.reload();
+    }
+
+    /* ------------ FILE TRANSFER ENGINE ----------------- */
+    async function initiateFileSend(remoteID) {
+        console.log('📁 initiateFileSend called for:', remoteID);
+        try {
+            const [fileHandle] = await window.showOpenFilePicker();
+            const file = await fileHandle.getFile();
+            console.log('📄 Selected file:', file.name, 'size:', file.size, 'bytes');
+            
+            window.currentFileToSend = file;
+            window.currentFileRemoteID = remoteID;
+
+            const transferId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            window.currentTransferId = transferId;
+            
+            peers[remoteID].send(JSON.stringify({
+                type: 'metadata',
+                transferId: transferId,
+                filename: file.name,
+                size: file.size
+            }));
+            
+            console.log("✅ File metadata sent to:", remoteID, "Transfer ID:", transferId);
+            
+            const statusSpan = document.getElementById(`status-${remoteID}`);
+            if (statusSpan) {
+                statusSpan.innerText = "📤 Waiting for acceptance...";
+            }
+        } catch (e) { 
+            console.log("❌ File selection cancelled or error:", e); 
+        }
+    }
+
+    function startActualStreaming(remoteID) {
+        console.log('🚀 Starting actual file transfer to:', remoteID);
+        const file = window.currentFileToSend;
+        const peer = peers[remoteID];
+        if (!file || !peer) {
+            console.error('❌ No file or peer found for:', remoteID);
+            return;
+        }
+
+        if (!peer._channel || peer._channel.readyState !== 'open') {
+            console.log('⏳ Data channel not ready, waiting...');
+            setTimeout(() => startActualStreaming(remoteID), 500);
+            return;
+        }
+
+        window.currentTransferStartTime = Date.now();
+
+        const progCont = document.getElementById(`prog-cont-${remoteID}`);
+        const progBar = document.getElementById(`prog-bar-${remoteID}`);
+        if (progCont) progCont.classList.remove('hidden');
+
+        const CHUNK_SIZE = 16384;
+        let offset = 0;
+        let startTime = Date.now();
+
+        const sendNext = () => {
+            if (!peer._channel || peer._channel.readyState !== 'open') {
+                console.log('⏳ Waiting for data channel to open...');
+                setTimeout(sendNext, 100);
+                return;
+            }
+            
+            if (peer._channel.bufferedAmount > 65536) {
+                console.log('⏸️ Buffer full, waiting...');
+                peer._channel.onbufferedamountlow = () => {
+                    peer._channel.onbufferedamountlow = null;
+                    sendNext();
+                };
+                return;
+            }
+
+            const slice = file.slice(offset, offset + CHUNK_SIZE);
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                try {
+                    peer.send(e.target.result);
+                    offset += e.target.result.byteLength;
+                    
+                    const percent = (offset / file.size) * 100;
+                    if (progBar) {
+                        progBar.style.width = percent + '%';
+                    }
+                    
+                    if (Math.floor(percent) % 10 === 0 && offset % (CHUNK_SIZE * 10) < CHUNK_SIZE) {
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        const speed = (offset / 1024) / elapsed;
+                        console.log(`📤 Transfer: ${Math.round(percent)}% (${(offset/1024).toFixed(0)}KB) - ${speed.toFixed(0)} KB/s`);
+                    }
+
+                    if (offset < file.size) {
+                        sendNext();
+                    } else {
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        const avgSpeed = (file.size / 1024) / elapsed;
+                        peer.send(JSON.stringify({ type: 'eof', transferId: window.currentTransferId }));
+                        console.log(`✅ File transfer complete! ${(file.size/1024/1024).toFixed(2)}MB in ${elapsed.toFixed(1)}s (${avgSpeed.toFixed(0)} KB/s)`);
+                        
+                        const statusSpan = document.getElementById(`status-${remoteID}`);
+                        if (statusSpan) {
+                            statusSpan.innerText = "📁 File sent!";
+                            setTimeout(() => {
+                                if (statusSpan.innerText === "📁 File sent!") {
+                                    statusSpan.innerText = "";
+                                }
+                            }, 2000);
+                        }
+                        
+                        alert('✅ File transfer complete!');
+                        if (progCont) setTimeout(() => progCont.classList.add('hidden'), 3000);
+                    }
+                } catch (err) {
+                    console.error('❌ Error sending chunk:', err);
+                }
+            };
+            
+            reader.onerror = (err) => {
+                console.error('❌ File read error:', err);
+            };
+            
+            reader.readAsArrayBuffer(slice);
+        };
+        
+        sendNext();
+    }
+
+    let pendingTransfers = {};
+
+    async function handleIncomingData(data, remoteID) {
+        const uint8Data = data instanceof ArrayBuffer ? new Uint8Array(data) : 
+                        data instanceof Uint8Array ? data : 
+                        new Uint8Array(data);
+        
+        const isTextMessage = uint8Data[0] === 123 || uint8Data[0] === 91;
+        
+        if (isTextMessage && uint8Data.length < 500) {
+            try {
+                const text = new TextDecoder().decode(uint8Data);
+                const msg = JSON.parse(text);
+                
+                if (msg.type === 'metadata') {
+                    console.log(`📥 Received file metadata from ${remoteID}:`, msg.filename, msg.size, 'Transfer ID:', msg.transferId);
+                    pendingTransfers[remoteID] = {
+                        filename: msg.filename,
+                        size: msg.size,
+                        transferId: msg.transferId,
+                        startTime: Date.now()
+                    };
+                    
+                    const btn = document.getElementById(`accept-${remoteID}`);
+                    if (btn) {
+                        btn.classList.remove('hidden');
+                        btn.classList.add('pulse');
+                        btn.innerText = `📥 Accept ${msg.filename}`;
+                        btn.style.display = 'block';
+                        btn.setAttribute('data-remote-id', remoteID);
+                        
+                        const newBtn = btn.cloneNode(true);
+                        btn.parentNode.replaceChild(newBtn, btn);
+                        
+                        newBtn.onclick = async () => {
+                            console.log(`✅ User accepted file from ${remoteID}`);
+                            const transfer = pendingTransfers[remoteID];
+                            if (!transfer) return;
+                            
+                            try {
+                                if (window.showSaveFilePicker) {
+                                    console.log('📁 Using native file picker (Chrome/Edge)');
+                                    const handle = await window.showSaveFilePicker({ 
+                                        suggestedName: transfer.filename 
+                                    });
+                                    window.currentWritable = await handle.createWritable();
+                                    window.currentTransferTotal = transfer.size;
+                                    window.currentTransferBytes = 0;
+                                    window.currentTransferId = transfer.transferId;
+                                    window.currentTransferRemote = remoteID;
+                                    window.currentTransferStartTime = Date.now();
+                                    window.currentTransferMode = 'native';
+                                    
+                                    peers[remoteID].send(JSON.stringify({ 
+                                        type: 'ready_to_receive',
+                                        transferId: transfer.transferId
+                                    }));
+                                    console.log(`📨 Sent ready_to_receive to ${remoteID} (native mode)`);
+                                } else {
+                                    console.log('📁 Using fallback download (Firefox/Safari)');
+                                    window.currentTransferChunks = [];
+                                    window.currentTransferTotal = transfer.size;
+                                    window.currentTransferBytes = 0;
+                                    window.currentTransferId = transfer.transferId;
+                                    window.currentTransferRemote = remoteID;
+                                    window.currentTransferFilename = transfer.filename;
+                                    window.currentTransferStartTime = Date.now();
+                                    window.currentTransferMode = 'fallback';
+                                    
+                                    peers[remoteID].send(JSON.stringify({ 
+                                        type: 'ready_to_receive',
+                                        transferId: transfer.transferId
+                                    }));
+                                    console.log(`📨 Sent ready_to_receive to ${remoteID} (fallback mode)`);
+                                }
+                                
+                                newBtn.classList.remove('pulse', 'hidden');
+                                newBtn.style.display = 'none';
+                                
+                                const progCont = document.getElementById(`prog-cont-${remoteID}`);
+                                if (progCont) progCont.classList.remove('hidden');
+                                
+                                const statusSpan = document.getElementById(`status-${remoteID}`);
+                                if (statusSpan) {
+                                    statusSpan.innerText = "📥 Downloading...";
+                                }
+                            } catch (e) { 
+                                console.log("❌ User declined save dialog:", e);
+                                delete pendingTransfers[remoteID];
+                            }
+                        };
+                    }
+                    return;
+                } 
+                else if (msg.type === 'ready_to_receive') {
+                    console.log(`🚀 Received ready_to_receive from ${remoteID}, starting transfer`);
+                    
+                    if (msg.transferId === window.currentTransferId) {
+                        startActualStreaming(remoteID);
+                    } else {
+                        console.warn('Transfer ID mismatch:', msg.transferId, 'vs', window.currentTransferId);
+                    }
+                    return;
+                }
+                else if (msg.type === 'eof') {
+                    console.log(`📁 File transfer complete from ${remoteID}, finalizing...`);
+                    
+                    if (window.currentTransferMode === 'native' && window.currentWritable) {
+                        await window.currentWritable.close();
+                        window.currentWritable = null;
+                        
+                        const elapsed = (Date.now() - window.currentTransferStartTime) / 1000;
+                        const sizeMB = window.currentTransferTotal / 1024 / 1024;
+                        console.log(`✅ File saved via native API: ${sizeMB.toFixed(2)}MB in ${elapsed.toFixed(1)}s`);
+                    } 
+                    else if (window.currentTransferMode === 'fallback' && window.currentTransferChunks) {
+                        const totalLength = window.currentTransferBytes;
+                        const combinedBuffer = new Uint8Array(totalLength);
+                        let offset = 0;
+                        
+                        for (const chunk of window.currentTransferChunks) {
+                            const chunkArray = new Uint8Array(chunk);
+                            combinedBuffer.set(chunkArray, offset);
+                            offset += chunkArray.length;
+                        }
+                        
+                        const blob = new Blob([combinedBuffer], { type: 'application/zip' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = window.currentTransferFilename;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        
+                        const elapsed = (Date.now() - window.currentTransferStartTime) / 1000;
+                        const sizeMB = window.currentTransferTotal / 1024 / 1024;
+                        console.log(`✅ File saved via download: ${sizeMB.toFixed(2)}MB in ${elapsed.toFixed(1)}s`);
+                        
+                        delete window.currentTransferChunks;
+                    }
+                    
+                    const statusSpan = document.getElementById(`status-${remoteID}`);
+                    if (statusSpan) {
+                        statusSpan.innerText = "📁 File received!";
+                        setTimeout(() => {
+                            if (statusSpan.innerText === "📁 File received!") {
+                                statusSpan.innerText = "";
+                            }
+                        }, 2000);
+                    }
+                    
+                    alert("✅ File saved successfully!");
+                    const progCont = document.getElementById(`prog-cont-${remoteID}`);
+                    if (progCont) progCont.classList.add('hidden');
+                    
+                    delete pendingTransfers[remoteID];
+                    window.currentTransferMode = null;
+                    return;
+                }
+            } catch (e) {
+                console.debug('Not JSON, treating as binary data');
+            }
+        }
+        
+        if (window.currentTransferMode === 'native' && window.currentWritable && window.currentTransferRemote === remoteID) {
+            try {
+                const buffer = data instanceof ArrayBuffer ? data : 
+                            data instanceof Uint8Array ? data.buffer : 
+                            data;
+                
+                await window.currentWritable.write(buffer);
+                window.currentTransferBytes += data.byteLength || data.length;
+                
+                const percent = (window.currentTransferBytes / window.currentTransferTotal) * 100;
+                const progBar = document.getElementById(`prog-bar-${remoteID}`);
+                if (progBar) {
+                    progBar.style.width = percent + '%';
+                }
+                
+                if (Math.floor(percent) % 10 === 0 && 
+                    window.currentTransferBytes % (16384 * 20) < 16384) {
+                    const elapsed = (Date.now() - window.currentTransferStartTime) / 1000;
+                    const speed = (window.currentTransferBytes / 1024) / elapsed;
+                    console.log(`📥 Download: ${Math.round(percent)}% (${(window.currentTransferBytes/1024).toFixed(0)}KB / ${(window.currentTransferTotal/1024).toFixed(0)}KB) - ${speed.toFixed(0)} KB/s`);
+                }
+            } catch (err) {
+                console.error('❌ Error writing file chunk:', err);
+            }
+        } 
+        else if (window.currentTransferMode === 'fallback' && window.currentTransferChunks && window.currentTransferRemote === remoteID) {
+            try {
+                const buffer = data instanceof ArrayBuffer ? data : 
+                            data instanceof Uint8Array ? data.buffer : 
+                            data;
+                
+                window.currentTransferChunks.push(buffer);
+                window.currentTransferBytes += buffer.byteLength || buffer.length;
+                
+                const percent = (window.currentTransferBytes / window.currentTransferTotal) * 100;
+                const progBar = document.getElementById(`prog-bar-${remoteID}`);
+                if (progBar) {
+                    progBar.style.width = percent + '%';
+                }
+                
+                if (Math.floor(percent) % 10 === 0 && 
+                    window.currentTransferBytes % (16384 * 20) < 16384) {
+                    const elapsed = (Date.now() - window.currentTransferStartTime) / 1000;
+                    const speed = (window.currentTransferBytes / 1024) / elapsed;
+                    console.log(`📥 Download: ${Math.round(percent)}% (${(window.currentTransferBytes/1024).toFixed(0)}KB / ${(window.currentTransferTotal/1024).toFixed(0)}KB) - ${speed.toFixed(0)} KB/s`);
+                }
+            } catch (err) {
+                console.error('❌ Error storing chunk:', err);
+            }
+        } else {
+            if (window.currentTransferRemote === remoteID) {
+                console.warn('Received binary data but no active transfer mode:', remoteID);
+            }
+        }
+    }
+    /* ------------ END FILE TRANSFER ENGINE ----------------- */
+
+    /* ------------ Additional Feature -- Snapshots ----------------- */
+    function snapshotAllVideos() {
+        console.log('📸 Taking snapshots of all remote videos');
+        
+        const remoteWrappers = document.querySelectorAll('.video-wrapper:not(.self)');
+        
+        if (remoteWrappers.length === 0) {
+            console.log('⚠️ No remote videos found');
+            // Optional: show a brief status message
+            const statusMsg = document.getElementById('statusMsg');
+            if (statusMsg) {
+                const original = statusMsg.innerHTML;
+                statusMsg.innerHTML = "⚠️ No remote videos to snapshot";
+                setTimeout(() => {
+                    statusMsg.innerHTML = original;
+                }, 2000);
+            }
+            return;
+        }
+        remoteWrappers.forEach((wrapper, index) => {
+            const video = wrapper.querySelector('video');
+            const remoteID = wrapper.id.replace('wrap-', '');
+            
+            if (video && video.videoWidth > 0) {
+                // Create canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Download
+                canvas.toBlob(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `snapshot-${remoteID}-${Date.now()}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    console.log(`✅ Snapshot saved for: ${remoteID}`);
+                }, 'image/png');
+            } else {
+                console.warn(`⚠️ Video not ready for: ${remoteID}`);
+            }
+        });
+    }
+
+    /* ------------ Additional Feature -- Full Screen Capture ----------------- */
+    function captureFullScreen() {
+        console.log('🖥️ Capturing entire visible screen...');
+        
+        const element = document.getElementById('appContainer');
+        
+        html2canvas(element, {
+            scale: 2,  // Higher resolution
+            backgroundColor: '#1a1a1a',
+            logging: false,
+            useCORS: true  // For cross-origin images if any
+        }).then(canvas => {
+            // Convert canvas to download link
+            canvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `screenshot-${Date.now()}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // Show confirmation
+                const statusMsg = document.getElementById('statusMsg');
+                if (statusMsg) {
+                    const original = statusMsg.innerHTML;
+                    statusMsg.innerHTML = "🖥️ Full screen captured!";
+                    setTimeout(() => {
+                        statusMsg.innerHTML = original;
+                    }, 2000);
+                }
+                
+                console.log('✅ Full screen captured');
+            }, 'image/png');
+        }).catch(error => {
+            console.error('❌ Screenshot failed:', error);
+            alert('Screenshot failed. Check console for details.');
+        });
+    }
+
+    /* ------------ Additional Feature -- Join Notification Sound ----------------- */
+    // Play a notification sound when someone joins
+    function playJoinTone() {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+        
+        const now = audioContext.currentTime;
+        const duration = 2.0;  // Changed from 5.0 to 2.0 seconds
+        
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        
+        oscillator.type = 'sine';  // Changed from 'square' to 'sine' for a cleaner, more pleasant higher tone
+        oscillator.frequency.value = 523.25;  // C5 (high C) - noticeably higher pitch than 130.81
+        
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        
+        // Short, pleasant envelope for 2-second beep
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.25, now + 0.05);  // Quick fade in
+        gain.gain.setValueAtTime(0.25, now + 1.7);            // Hold
+        gain.gain.exponentialRampToValueAtTime(0.00001, now + duration);  // Fade out
+        
+        oscillator.start(now);
+        oscillator.stop(now + duration);
+        
+        console.log('🔔 Playing 2 second notification tone');
+        
+    } catch (e) {
+        console.log('Audio not supported:', e);
+    }
+}
+
+    function toggleStartupDirections() {
+        const directions = document.getElementById('directions');
+        if (directions.style.display === 'none') {
+            directions.style.display = 'block';
+        } else { 
+            directions.style.display = 'none';
+        }   
+    }
+
+    function toggleRoomLink() {
+        const roomLinkInfo = document.getElementById('roomLinkInfo');
+        if (roomLinkInfo.style.display === 'none') {
+            roomLinkInfo.style.display = 'block';
+        } else { 
+            roomLinkInfo.style.display = 'none';
+        }   
+    }
+
+    // Help Modal Functions
+    function openHelpModal() {
+        document.getElementById('helpModal').style.display = 'flex';
+    }
+
+    function closeHelpModal() {
+        document.getElementById('helpModal').style.display = 'none';
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        const modal = document.getElementById('helpModal');
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+
+    function closeApp() {
+        console.log("🛑 Closing app...");
+        
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+        }
+        
+        Object.values(peers).forEach(peer => peer.destroy());
+        
+        if (socket) socket.disconnect();
+        
+        const message = document.createElement('div');
+        message.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            font-family: sans-serif;
+            text-align: center;
+            padding: 20px;
+        `;
+        
+        message.innerHTML = `
+            <h2 style="font-size: 32px; margin-bottom: 20px;">👋 Chat Ended</h2>
+            <p style="font-size: 20px; margin-bottom: 30px;">
+            Your video chat has been safely closed.<br>
+            Camera and microphone are turned off.
+            </p>
+            <p style="font-size: 18px; color: #aaa; margin-bottom: 40px;">
+            Thank you for visiting with friends!
+            </p>
+        `;
+        
+        document.body.appendChild(message);
+        
+        setTimeout(() => {
+            console.log('✅ App cleanup complete');
+        }, 100);
+    }
+
+    document.getElementById("closeAppBtn").addEventListener("click", closeApp);
+
+    // Expose functions globally
+    window.startCall = startCall;
+    window.toggleMic = toggleMic;
+    window.toggleCamera = toggleCamera;
+    window.toggleScreenShare = toggleScreenShare;
+    window.hangUp = hangUp;
+    window.initiateFileSend = initiateFileSend;
+    window.toggleFullScreen = toggleFullScreen;
+    window.switchRoom = switchRoom;
+    window.createCustomRoom = createCustomRoom;
+    window.copyRoomLink = copyRoomLink;
+    window.toggleStartupDirections = toggleStartupDirections;
+    window.openHelpModal = openHelpModal;
+    window.closeHelpModal = closeHelpModal;
+
+</script>
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📖 Video Chat Guide</h3>
+                <button class="modal-close" onclick="closeHelpModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Quick Start -->
+                <div class="help-section">
+                    <h4>🚀 Quick Start</h4>
+                    <p>1. Click <strong>"START/JOIN"</strong> and allow camera/microphone access</p>
+                    <p>2. Share your room link with family (shown above)</p>
+                    <p>3. Wait for others to join or join their call</p>
+                    <div class="help-tip">
+                        <strong>💡 Tip:</strong> Bookmark your room link for easy access next time!
+                    </div>
+                </div>
+
+                <!-- Control Buttons -->
+                <div class="help-section">
+                    <h4>🎮 Control Buttons (Bottom Bar)</h4>
+                    <ul>
+                        <li><strong>❓ Help - Full User Guide</strong> - Complete Video Chat Guide / Help?</li>
+                        <li><strong>🎤 Mute</strong> - Turns your microphone on/off (red = muted)</li>
+                        <li><strong>📞 Leave</strong> - Exits the call and returns to start screen</li>
+                        <li><strong>📷 Camera</strong> - Turns your camera on/off (red = off)</li>
+                        <li><strong>💻 Share</strong> - Shares your screen (present documents, photos, etc.)</li>
+                        <li><strong>📸 Snap All</strong> - Take photo (png) of each participant</li>
+                        <li><strong>💻 Prt Scr</strong> - Capture entire screen, all videos plus control buttons, saves as png image</li>
+                        <li><strong>🚪 Close</strong> - Ends the call and closes the app completely</li>
+                    </ul>
+                </div>
+
+                <!-- Remote Video Controls -->
+                <div class="help-section">
+                    <h4>🖥️ Controls on Each Person's Video</h4>
+                    <ul>
+                        <li><strong>🖥️ Full Screen</strong> - Makes that video full screen (press ESC to exit)</li>
+                        <li><strong>📤 Send Zip</strong> - Sends a ZIP file to that person</li>
+                        <li><strong>📥 Accept Zip</strong> - Accepts an incoming file (pulses green when receiving)</li>
+                    </ul>
+                </div>
+
+                <!-- ShareScreen -->
+                <div class="help-section">
+                    <h4>💻 Share</h4>
+                    <ul>
+                        <li>Click <strong>'💻 Share' button</strong> on the</li>
+                        <li>computer control bar to share files with other users. Most</li>
+                        <li>often photos will be shared but other types of files</li>
+                        <li>such as docs, text files, etc. Mobile devices are not</li>
+                        <li>allowed to share their files but can view files shared</li>
+                        <li>from a computer.</li>
+                        <li>A dialog box will appear. I always select the 'Entire</li>
+                        <li>Screen' option, giving you more control over the sharing</li>
+                        <li>process. Then click on the picture of the full screen</li>
+                        <li>and then click on the 'Share' button.</li>
+                        <li>Use the file browser to select the location of the files</li>
+                        <li>to share and then click on the first file to share.</li>
+                        <li>Enlarge to full screen if needed. You may also roll the</li>
+                        <li>mouse wheel to zoom on a portion of the photo. You can</li>
+                        <li>click and drag the mouse to scroll to a different part</li>
+                        <li>of the enlarged view. Click the small triangles on the</li>
+                        <li>left or right side of the photo to move to the next or</li>
+                        <li> previous photo. When all done showing images, click</li>
+                        <li>'Stop Sharing' button. Now navigate bck to the video chat.</li>
+                    </ul>               
+                </div>
+
+                <!-- File Transfer -->
+                <div class="help-section">
+                    <h4>📁 File Transfer</h4>
+                    <ul>
+                        <li>Only <strong>ZIP files</strong> are supported (great for sharing multiple photos)</li>
+                        <li>Click <strong>"Send Zip"</strong> on the person's video to choose a file</li>
+                        <li>Click <strong>"Accept Zip"</strong> when someone sends you a file</li>
+                        <li>A progress bar shows transfer status</li>
+                        <li>Files save to your computer's Downloads folder</li>
+                    </ul>
+                    <div class="help-tip">
+                        <strong>📌 Note:</strong> Chrome/Edge users get a save dialog. Firefox/Safari users get a download prompt.
+                    </div>
+                </div>
+
+                <!-- Print Screen -->
+                <div class="help-section">
+                    <h4>💻 Prt Scr</h4>
+                    <ul>
+                        <li>Click <strong>'Prt Scr' button</strong> on the</li>
+                        <li>control bar to save a photo of the full screen.</li>
+                        <li>When on a computer, a dialog box will appear. Please</li>
+                        <li>select the location to save the full screenshot.</li>
+                        <li>You also have the option to change the name of the file.</li>
+                        <li>Click the 'Save' button.</li>
+                        <li>When on a mobile device, the screenshot will be saved</li>
+                        <li>automatically to your device's default photo gallery</li>
+                        <li>or downloads folder.</li>
+                    </ul>               
+                </div>
+
+                <!-- Snap All -->
+                <div class="help-section">
+                    <h4>💻 Snap All</h4>
+                    <ul>
+                        <li>Click <strong>'📸 Snap All' button</strong> on the</li>
+                        <li>control bar to save a photo of each user's full screen.</li>
+                        <li>If 3 or 4 users are in the room, you will be asked if</li>
+                        <li>you want to download multiple files. Click 'Allow'.</li>
+                        <li>When on a computer, a dialog box will appear. Please</li>
+                        <li>select the location to save the first remote user's video.</li>
+                        <li>You also have the option to change the name of the file.</li>
+                        <li>Click the 'Save' button. Same for next user.</li>
+                        <li>When on a mobile device, the dialog box also asks for</li>
+                        <li>download permission for each user. Each snapshot will be</li>
+                        <li>saved automatically to your device's default photo gallery</li>
+                        <li>or downloads folder.</li>
+                    </ul>               
+                </div>
+
+                <!-- Private Rooms -->
+                <div class="help-section">
+                    <h4>🔑 Creating Your Own Private Room</h4>
+                    <p>Add <code>?room=YourRoomName</code> to the end of the URL</p>
+                    <p>Example: <code>https://meshvideochat.fly.dev/?room=smith-family</code></p>
+                    <p><strong>Bookmark your custom room link</strong> and use it every time!</p>
+                    <div class="help-tip">
+                        <strong>💡 Tip:</strong> Use letters, numbers, and hyphens only (example: texas-family-2024)
+                    </div>
+                </div>
+
+                <!-- Play icon youTube video -->
+                <div class="help-section">
+                    <h4>▶️ Play youTube video showing all features</h4>  
+                    <ul>
+                        <li>Click <strong>'▶️ Watch Tutorial'</strong> button on the</li>
+                        <li>control bar to view all the features of the meshvideochat app.</li>
+                        <li>Click the Fullscreen icon in the lower right corner or press</li>
+                        <li>the letter 'F' to view the video in fullscreen mode.</li>
+                        <li>Press the 'ESC' key to exit fullscreen mode.</li>
+                        <li>When finished viewing the video, close the browser tab in</li>
+                        <li>order to return to the app.</li>
+                    </ul>               
+                </div>
+
+                <!-- Troubleshooting -->
+                <div class="help-section">
+                    <h4>🔧 Troubleshooting</h4>
+                    <ul>
+                        <li><strong>No video?</strong> - Click the camera button to turn it on</li>
+                        <li><strong>No sound?</strong> - Click the mic button to unmute</li>
+                        <li><strong>Can't connect?</strong> - Refresh the page and try again</li>
+                        <li><strong>Screen share not working?</strong> - Make sure you allow screen capture permission</li>
+                        <li><strong>Others can't see you?</strong> - Make sure you clicked "Allow" for camera/mic</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+
+
+</body>
+</html>
