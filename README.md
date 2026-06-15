@@ -10,7 +10,7 @@ Commercial platforms (Zoom, Jitsi, Teams) introduce heavy friction for seniors t
 * **Defensive UX:** The room generator automatically sanitizes inputs (stripping spaces, capital letters, and special characters) behind the scenes to prevent user-end link errors.
 * **High-Target Accessibility:** Buttons are oversized, vividly colored, and spaced to accommodate shaky hands or low dexterity.
 * **Privacy-First Architecture:** Built using serverless WebRTC mesh architecture. Once the signaling handshake is complete via a lightweight server, video data moves directly between peers.
-* **Key features include: Screen sharing, file transfer, print screen, print individual users, detailed user guide, linked youTube video demonstrating features of app
+* **Key features include: Screen sharing, file transfer, print screen, print individual users, detailed user guide, and a linked youTube video demonstrating features of app.
 
 ## Tech Stack
 * **Frontend:** Vanilla HTML5, CSS3, JavaScript
