@@ -22,6 +22,6 @@ I am now looking for an organization, university, or open-source community inter
 Distributed under the MIT License. Feel free to host, modify, and scale this to keep communities connected.
 
 ## Contact
-* **Donald Little
-* **email: dlittle644@yahoo.com
-* **cell phone: +66 094-555-6198
+* **Name:** Donald Little
+* **Email:** dlittle644@yahoo.com
+* **Mobile Number:**: +66 094-555-6198
