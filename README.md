@@ -23,5 +23,5 @@ Distributed under the MIT License. Feel free to host, modify, and scale this to 
 
 ## Contact
 * **Name:** Donald Little
-* **Email:** dlittle644@yahoo.com
+* **Email:** dlittle644@ygmail.com
 * **Mobile Number:**: +66 094-555-6198
