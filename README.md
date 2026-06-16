@@ -1,36 +1,27 @@
-Senior-Friendly WebRTC Video Chat App
-A simple, secure, no-login video chat tool designed for seniors and people with physical limitations. Works on computers, tablets, and smartphones. Includes screen sharing, file transfer, print-screen capture, and individual user photos.
-I’m a 76-year-old developer living near Bangkok, Thailand, and I built this app to help my own family and friends stay connected across the US and Thailand. It has been tested extensively and is currently deployed and in active use.
+# Accessible Mesh Video Chat
+
+A lightweight, zero-login, peer-to-peer WebRTC video chat application specifically designed for older adults and individuals with fine motor control challenges (such as Parkinson's Disease).
+
+## Why This Exists
+Commercial platforms (Zoom, Jitsi, Teams) introduce heavy friction for seniors through mandatory account creation, complex dashboards, and small user-interface targets. This application removes those barriers entirely, prioritizing extreme ease of use and physical accessibility. I’m a 76-year-old developer living near Bangkok, Thailand, and I built this app to help my own family and friends stay connected across the US and Thailand. It has been tested extensively and is currently deployed and in active use.
 I am now looking for an organization, university, or open-source community interested in adopting and maintaining this project long-term.
 
-Features
-No accounts or logins 
-Private rooms for secure communication 
-WebRTC video and audio 
-Screen sharing 
-File transfer 
-Print-screen capture 
-User photos 
-Works across modern browsers and devices 
-Hosted on Fly.io 
-User guide + YouTube demonstrations
+## Key Features
+* **One-Click Joining:** No accounts, passwords, or typing required for the recipient. Clicking a single text link immediately drops the user into the video room.
+* **Highlights include:** Screen sharing, file transfer, print screen, print individual user photo, detailed user guide, and a linked youTube video demonstrating features of app.
+* **Defensive UX:** The room generator automatically sanitizes inputs (stripping spaces, capital letters, and special characters) behind the scenes to prevent user-end link errors.
+* **High-Target Accessibility:** Buttons are oversized, vividly colored, and spaced to accommodate shaky hands or low dexterity.
+* **Privacy-First Architecture:** Built using serverless WebRTC mesh architecture. Once the signaling handshake is complete via a lightweight server, video data moves directly between peers.
 
-Technical Overview
-WebRTC peer-to-peer communication 
-Lightweight HTML/JS/CSS frontend 
-Simple signaling server (Fly.io) 
-No database, no tracking, no analytics 
-Easy to deploy and maintain 
+## Tech Stack
+* **Frontend:** Vanilla HTML5, CSS3, JavaScript
+* **Protocol:** WebRTC (Peer-to-Peer Mesh)
+* **Infrastructure:** Hosted on Fly.dev, leveraging Xirsys for TURN relay fallback.
 
-Seeking New Maintainers
-This project is available for adoption by:
-Nonprofits supporting seniors or digital inclusion 
-Assistive technology organizations 
-Universities (HCI, gerontology, CS capstones) 
-Open-source communities 
-If your group is interested in continuing this work, I’m happy to support a smooth transition.
+## License
+Distributed under the MIT License. Feel free to host, modify, and scale this to keep communities connected.
 
-Contact
+## Contact
 Donald Little
 email: dlittle644@yahoo.com
 cell phone: +66 094-555-6198
